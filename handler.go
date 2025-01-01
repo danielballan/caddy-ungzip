@@ -96,6 +96,12 @@ func (r *ResponseUngzip) Validate() error {
 	return nil
 }
 
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
+}
+
 func (r ResponseUngzip) ServeHTTP(w http.ResponseWriter, req *http.Request, next caddyhttp.Handler) error {
 	// Check if path matches configured paths
 	if len(r.Paths) > 0 {
@@ -111,8 +117,11 @@ func (r ResponseUngzip) ServeHTTP(w http.ResponseWriter, req *http.Request, next
 		}
 	}
 
-	buf := new(bytes.Buffer)
-	rec := caddyhttp.NewResponseRecorder(w, buf, func(status int, header http.Header) bool {
+	respBuf := bufPool.Get().(*bytes.Buffer)
+	respBuf.Reset()
+	defer bufPool.Put(respBuf)
+
+	rec := caddyhttp.NewResponseRecorder(w, respBuf, func(status int, headers http.Header) bool {
 		return true
 	})
 
@@ -120,7 +129,6 @@ func (r ResponseUngzip) ServeHTTP(w http.ResponseWriter, req *http.Request, next
 		return err
 	}
 
-	// Only attempt to decode if the content is gzipped
 	if !isGzipped(rec.Header()) {
 		return rec.WriteResponse()
 	}
@@ -144,25 +152,24 @@ func (r ResponseUngzip) ServeHTTP(w http.ResponseWriter, req *http.Request, next
 		return rec.WriteResponse()
 	}
 
-	reader, err := gzip.NewReader(buf)
+	reader, err := gzip.NewReader(rec.Buffer())
 	if err != nil {
 		return rec.WriteResponse()
 	}
 	defer reader.Close()
 
-	decompressed, err := io.ReadAll(reader)
-	if err != nil {
+	outBuf := bufPool.Get().(*bytes.Buffer)
+	outBuf.Reset()
+	defer bufPool.Put(outBuf)
+
+	if _, err := io.Copy(outBuf, reader); err != nil {
 		return rec.WriteResponse()
 	}
 
-	// Replace the buffer content
-	*rec.Buffer() = *bytes.NewBuffer(decompressed)
-
-	// Update headers
 	rec.Header().Del("Content-Encoding")
-	rec.Header().Set("Content-Length", strconv.Itoa(len(decompressed)))
+	rec.Header().Set("Content-Length", strconv.Itoa(outBuf.Len()))
 
-	return err
+	return rec.WriteResponse()
 }
 
 func isGzipped(header http.Header) bool {
