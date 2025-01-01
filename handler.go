@@ -96,7 +96,6 @@ func (r *ResponseUngzip) Validate() error {
 	return nil
 }
 
-// ServeHTTP implements caddyhttp.MiddlewareHandler.
 func (r ResponseUngzip) ServeHTTP(w http.ResponseWriter, req *http.Request, next caddyhttp.Handler) error {
 	// Check if path matches configured paths
 	if len(r.Paths) > 0 {
@@ -112,10 +111,13 @@ func (r ResponseUngzip) ServeHTTP(w http.ResponseWriter, req *http.Request, next
 		}
 	}
 
-	rec := caddyhttp.NewResponseRecorder(w, nil, nil)
-	
-	err := next.ServeHTTP(rec, req)
-	if err != nil {
+	// Create response recorder with a buffer
+	buf := new(bytes.Buffer)
+	rec := caddyhttp.NewResponseRecorder(w, buf, func(status int, header http.Header) bool {
+		return true // capture all responses
+	})
+
+	if err := next.ServeHTTP(rec, req); err != nil {
 		return err
 	}
 
@@ -139,13 +141,11 @@ func (r ResponseUngzip) ServeHTTP(w http.ResponseWriter, req *http.Request, next
 		}
 	}
 
-	// Check response size
-	if rec.Buffer().Len() > int(r.MaxSize) {
+	if int64(buf.Len()) > r.MaxSize {
 		return rec.WriteResponse()
 	}
 
-	body := rec.Buffer().Bytes()
-	reader, err := gzip.NewReader(bytes.NewReader(body))
+	reader, err := gzip.NewReader(buf)
 	if err != nil {
 		return err
 	}
@@ -157,16 +157,19 @@ func (r ResponseUngzip) ServeHTTP(w http.ResponseWriter, req *http.Request, next
 	}
 
 	// Remove the Content-Encoding header since we're decompressing
-	rec.Header().Del("Content-Encoding")
-	
+	w.Header().Del("Content-Encoding")
+
 	// Update Content-Length for the decompressed content
-	rec.Header().Set("Content-Length", strconv.Itoa(len(decompressed)))
+	w.Header().Set("Content-Length", strconv.Itoa(len(decompressed)))
 
-	// Replace the response body with decompressed content
-	rec.Buffer().Reset()
-	rec.Buffer().Write(decompressed)
+	// Write the decompressed content
+	buf.Reset()
 
-	return rec.WriteResponse()
+	if status := rec.Status(); status > 0 {
+		w.WriteHeader(rec.Status())
+	}
+	w.Write(decompressed)
+	return nil
 }
 
 func isGzipped(header http.Header) bool {
