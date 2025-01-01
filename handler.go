@@ -156,8 +156,7 @@ func (r ResponseUngzip) ServeHTTP(w http.ResponseWriter, req *http.Request, next
 	}
 
 	// Replace the buffer content
-	rec.Buffer().Reset()
-	rec.Buffer().Write(decompressed)
+	*rec.Buffer() = *bytes.NewBuffer(decompressed)
 
 	// Update headers
 	rec.Header().Del("Content-Encoding")
