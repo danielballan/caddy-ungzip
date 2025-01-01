@@ -14,8 +14,15 @@ import (
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 )
 
+func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
+	handler := new(Handler)
+	err := handler.UnmarshalCaddyfile(h.Dispenser)
+	return handler, err
+}
+
 func init() {
 	caddy.RegisterModule(ResponseUngzip{})
+	httpcaddyfile.RegisterHandlerDirective("ungzip", parseCaddyfile)
 }
 
 // ResponseUngzip implements an HTTP handler that decompresses gzipped responses
