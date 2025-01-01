@@ -3,6 +3,7 @@ package ungzip
 import (
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
