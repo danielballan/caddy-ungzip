@@ -155,14 +155,14 @@ func (r ResponseUngzip) ServeHTTP(w http.ResponseWriter, req *http.Request, next
 		return rec.WriteResponse()
 	}
 
-	// Update headers
-	w.Header().Del("Content-Encoding")
-	w.Header().Set("Content-Length", strconv.Itoa(len(decompressed)))
+	// Replace the buffer content
+	rec.Buffer().Reset()
+	rec.Buffer().Write(decompressed)
 
-	if status := rec.Status(); status > 0 {
-		w.WriteHeader(status)
-	}
-	_, err = w.Write(decompressed)
+	// Update headers
+	rec.Header().Del("Content-Encoding")
+	rec.Header().Set("Content-Length", strconv.Itoa(len(decompressed)))
+
 	return err
 }
 
