@@ -11,19 +11,9 @@ import (
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
+	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 )
-
-func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
-	handler := new(Handler)
-	err := handler.UnmarshalCaddyfile(h.Dispenser)
-	return handler, err
-}
-
-func init() {
-	caddy.RegisterModule(ResponseUngzip{})
-	httpcaddyfile.RegisterHandlerDirective("ungzip", parseCaddyfile)
-}
 
 // ResponseUngzip implements an HTTP handler that decompresses gzipped responses
 type ResponseUngzip struct {
@@ -181,6 +171,17 @@ func (r ResponseUngzip) ServeHTTP(w http.ResponseWriter, req *http.Request, next
 
 func isGzipped(header http.Header) bool {
 	return strings.Contains(strings.ToLower(header.Get("Content-Encoding")), "gzip")
+}
+
+func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
+	handler := new(ResponseUngzip)
+	err := handler.UnmarshalCaddyfile(h.Dispenser)
+	return handler, err
+}
+
+func init() {
+	caddy.RegisterModule(ResponseUngzip{})
+	httpcaddyfile.RegisterHandlerDirective("ungzip", parseCaddyfile)
 }
 
 // Interface guards
