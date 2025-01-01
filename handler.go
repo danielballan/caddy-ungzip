@@ -149,7 +149,7 @@ func (r ResponseUngzip) ServeHTTP(w http.ResponseWriter, req *http.Request, next
 		}
 	}
 
-	if int64(buf.Len()) > r.MaxSize {
+	if int64(rec.Buffer().Len()) > r.MaxSize {
 		return rec.WriteResponse()
 	}
 
